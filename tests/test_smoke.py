@@ -628,12 +628,12 @@ def test_auto_memory_triggers():
     # user identity
     hits = _scan_for_memory("我是数据科学家，在做推荐系统")
     assert any(mtype == "user" for _, _, mtype in hits)
-    # feedback / don't
+    # persistent rule / don't
     hits = _scan_for_memory("以后不要 mock 数据库，用真实连接")
-    assert any(mtype == "feedback" for _, _, mtype in hits)
+    assert any(mtype == "rule" for _, _, mtype in hits)
     # remember
     hits = _scan_for_memory("记住，我们用 pnpm 不是 npm")
-    assert any(mtype == "feedback" for _, _, mtype in hits)
+    assert any(mtype == "rule" for _, _, mtype in hits)
     # no trigger
     hits = _scan_for_memory("帮我改一下这个函数")
     assert hits == []
@@ -1223,6 +1223,32 @@ def test_daily_turn_journal_and_continuity_recall():
         assert hits[0][1].layer == "recurrent"
 
 
+def test_persistent_rule_survives_fresh_start_and_unrelated_query():
+    from xirang import memory
+
+    with tempfile.TemporaryDirectory() as d:
+        mdir = Path(d)
+        memory.save_rule(
+            mdir,
+            "never_say_dont_know",
+            "以后永远不要说不知道；如果不确定，先说明假设，再继续分析。",
+        )
+        memory.save_memory(
+            mdir,
+            "user_role",
+            "user likes concise output",
+            "user",
+            "请保持简洁，但不要直接说不知道。",
+        )
+        rendered = memory.render_for_system_prompt(mdir, query="帮我看看这个 sqlite 表", budget_bytes=4096)
+        assert "Persistent User Rules" in rendered
+        assert "永远不要说不知道" in rendered
+
+        rows = memory.persistent_rules(mdir, limit=5)
+        assert rows
+        assert rows[0].type == "rule"
+
+
 def test_agent_profile_switch_and_clear():
     from xirang.agent import Agent
     from xirang.persona import Persona
@@ -1517,6 +1543,7 @@ if __name__ == "__main__":
         test_session_persona_mode_roundtrip,
         test_layered_memory_retrieval_and_capture,
         test_daily_turn_journal_and_continuity_recall,
+        test_persistent_rule_survives_fresh_start_and_unrelated_query,
         test_agent_profile_switch_and_clear,
         test_permissions_and_audit_roundtrip,
         test_desktop_tool_is_registered_and_safe_by_default,

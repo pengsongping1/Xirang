@@ -64,7 +64,9 @@ Slash commands:
   /persona off                 disable active persona
   /persona list                list saved personas
   /memory add <name> :: <body> save a memory
+  /memory rule <name> :: <body> save a persistent user rule
   /memory list                 show memory index
+  /memory rules                show persistent user rules
   /memory search <query>       search recalled memory candidates
   /memory status               show layered memory counts
   /memory recent [N]           show recent continuity memories
@@ -449,7 +451,7 @@ def _cmd_persona(agent: Agent, rest: str) -> None:
 def _cmd_memory(agent: Agent, rest: str) -> None:
     parts = rest.strip().split(maxsplit=1)
     if not parts:
-        ui.info("usage: /memory add <name> :: <body> | list | search <query> | recent [N] | status | forget <name>")
+        ui.info("usage: /memory add <name> :: <body> | rule <name> :: <body> | list | rules | search <query> | recent [N] | status | forget <name>")
         return
     sub, arg = parts[0], parts[1] if len(parts) > 1 else ""
     if sub == "add":
@@ -461,9 +463,27 @@ def _cmd_memory(agent: Agent, rest: str) -> None:
         fp = mem.save_memory(agent.cfg.memory_dir, name=name, description=body[:100],
                              mem_type="user", body=body)
         ui.success(f"memory saved: {fp.name}")
+    elif sub == "rule":
+        if "::" not in arg:
+            ui.warn("format: /memory rule <name> :: <body>")
+            return
+        name, body = arg.split("::", 1)
+        name, body = name.strip(), body.strip()
+        fp = mem.save_rule(agent.cfg.memory_dir, name=name, body=body)
+        ui.success(f"persistent rule saved: {fp.name}")
     elif sub == "list":
         idx = mem.load_index(agent.cfg.memory_dir)
         ui.markdown(idx) if idx else ui.info("no memories yet")
+    elif sub == "rules":
+        rows = mem.persistent_rules(agent.cfg.memory_dir, limit=12)
+        if not rows:
+            ui.info("no persistent user rules yet")
+            return
+        lines = ["**Persistent user rules**"]
+        for record in rows:
+            updated = time.strftime("%Y-%m-%d %H:%M", time.localtime(record.updated_at))
+            lines.append(f"- `{record.name}` · {updated} · {record.description}")
+        ui.markdown("\n".join(lines))
     elif sub == "search":
         if not arg:
             ui.warn("usage: /memory search <query>")

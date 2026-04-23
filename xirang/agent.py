@@ -49,6 +49,7 @@ BASE_SYSTEM = """You are Xirang (息壤), a lightweight self-evolving agent.
 - Be terse. Respond in 2-3 sentences unless explicitly asked for more.
 - When you successfully complete a task, Xirang auto-saves the tool sequence as a recipe and skilllet — next similar task will be faster.
 - When the user teaches you something durable ("remember X", "I am Y", "never do Z"), Xirang auto-saves it as a memory.
+- Persistent User Rules in memory are active defaults across sessions. Follow them unless the user explicitly changes or removes them.
 
 # Task flow
 - Plan silently, act directly. No long preambles.
@@ -62,10 +63,10 @@ _TRIGGERS_USER = [
     (r"(?:我是|我叫|my name is|i am|i'm)\s*([^。\n！？.!?]{2,60})", "user"),
     (r"(?:我的|my)\s*(?:角色|职位|role|job)\s*(?:是|is)?\s*([^。\n！？.!?]{2,80})", "user"),
 ]
-_TRIGGERS_FEEDBACK = [
-    (r"(?:不要|别|don'?t|never)\s+([^。\n！？.!?]{3,80})", "feedback"),
-    (r"(?:以后|从现在起|always|from now on)([^。\n！？.!?]{3,120})", "feedback"),
-    (r"(?:记住|remember)\s*[，,:]?\s*([^。\n！？.!?]{3,120})", "feedback"),
+_TRIGGERS_RULE = [
+    (r"(?:不要|别|don'?t|never)\s+([^。\n！？.!?]{3,120})", "rule"),
+    (r"(?:以后|从现在起|永远|always|from now on)\s*([^。\n！？.!?]{3,140})", "rule"),
+    (r"(?:记住|remember)\s*[，,:]?\s*([^。\n！？.!?]{3,140})", "rule"),
 ]
 _TRIGGERS_PROJECT = [
     (r"(?:我们在做|we are working on|this project is)([^。\n！？.!?]{3,120})", "project"),
@@ -75,7 +76,7 @@ _TRIGGERS_PROJECT = [
 def _scan_for_memory(text: str) -> list[tuple[str, str, str]]:
     """Return [(name, description, type)] for any durable info in text."""
     out: list[tuple[str, str, str]] = []
-    for pattern, mem_type in _TRIGGERS_USER + _TRIGGERS_FEEDBACK + _TRIGGERS_PROJECT:
+    for pattern, mem_type in _TRIGGERS_USER + _TRIGGERS_RULE + _TRIGGERS_PROJECT:
         m = re.search(pattern, text, re.IGNORECASE)
         if m:
             captured = m.group(m.lastindex or 1).strip().strip(".,。！!")
@@ -159,7 +160,10 @@ class Agent:
         # 2. Auto-memory scan on user input
         captured = _scan_for_memory(user_input)
         for name, desc, mtype in captured:
-            mem.save_memory(self.cfg.memory_dir, name=name, description=desc, mem_type=mtype, body=desc)
+            if mtype == "rule":
+                mem.save_rule(self.cfg.memory_dir, name=name, body=desc, description=desc, source="auto_rule")
+            else:
+                mem.save_memory(self.cfg.memory_dir, name=name, description=desc, mem_type=mtype, body=desc)
             ui.status(f"auto-memory saved: [{mtype}] {desc[:60]}")
 
         # 3. Append user message

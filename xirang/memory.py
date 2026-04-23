@@ -34,6 +34,7 @@ LAYERS = ("prelude", "recurrent", "coda", "archive")
 ALWAYS_ON_LAYERS = ("prelude",)
 LAYER_SELECTION_CAPS = {"prelude": 6, "recurrent": 4, "coda": 4, "archive": 3}
 MIXED_RECALL_ORDER = ("recurrent", "coda", "archive")
+PERSISTENT_RULE_TYPES = {"rule", "preference", "instruction"}
 CONTINUITY_RE = re.compile(
     r"(上次|昨天|前天|之前|刚才|继续|接着|还记得|想起来|last|yesterday|previous|continue|recap)",
     re.IGNORECASE,
@@ -67,7 +68,7 @@ def _ensure_layout(memory_dir: Path) -> None:
 def _normalize_layer(layer: str | None, mem_type: str = "") -> str:
     if layer in LAYERS:
         return str(layer)
-    if mem_type in {"user", "feedback", "project"}:
+    if mem_type in {"user", "feedback", "project", "rule", "preference", "instruction"}:
         return "prelude"
     if mem_type in {"session", "summary", "state"}:
         return "recurrent"
@@ -218,6 +219,34 @@ def forget(memory_dir: Path, name: str) -> bool:
     return removed
 
 
+def _is_persistent_rule(record: MemoryFile) -> bool:
+    return record.layer == "prelude" and (
+        record.type in PERSISTENT_RULE_TYPES or "sticky" in record.tags or "rule" in record.tags
+    )
+
+
+def save_rule(
+    memory_dir: Path,
+    name: str,
+    body: str,
+    *,
+    description: str = "",
+    source: str = "user_rule",
+) -> Path:
+    text = (body or "").strip()
+    desc = (description or text[:100]).strip()
+    return save_memory(
+        memory_dir,
+        name=name.strip(),
+        description=desc,
+        mem_type="rule",
+        body=text,
+        layer="prelude",
+        tags=["sticky", "rule"],
+        source=source,
+    )
+
+
 def _token_set(text: str) -> set[str]:
     return set(recipe.fingerprint(text).split())
 
@@ -258,7 +287,8 @@ def _score_prelude_record(record: MemoryFile, query: str) -> float:
         overlap = len(query_tokens & _token_set(haystack))
     age_hours = max((time.time() - record.updated_at) / 3600.0, 0.0)
     freshness_bonus = 1.0 / (1.0 + age_hours / 168.0)
-    return 5.0 + overlap * 8 + freshness_bonus
+    sticky_bonus = 12.0 if _is_persistent_rule(record) else 0.0
+    return 5.0 + overlap * 8 + freshness_bonus + sticky_bonus
 
 
 def _body_excerpt(record: MemoryFile, query: str, max_chars: int = 1600) -> str:
@@ -309,8 +339,15 @@ def render_for_system_prompt(
         selected.append((section, record, content))
         used_bytes += size
 
+    persistent_rules = sorted(
+        [record for record in records if _is_persistent_rule(record)],
+        key=lambda record: (-record.updated_at, record.name),
+    )[:12]
+    for record in persistent_rules:
+        try_add("Persistent User Rules", record, _body_excerpt(record, query or record.name, max_chars=1200))
+
     preludes = sorted(
-        [record for record in records if record.layer in ALWAYS_ON_LAYERS],
+        [record for record in records if record.layer in ALWAYS_ON_LAYERS and not _is_persistent_rule(record)],
         key=lambda record: _score_prelude_record(record, query),
         reverse=True,
     )[:LAYER_SELECTION_CAPS["prelude"]]
@@ -332,6 +369,7 @@ def render_for_system_prompt(
         "\n# Layered memory context",
         f"- loaded_bytes: {used_bytes}",
         f"- budget_bytes: {budget_bytes}",
+        "- Treat Persistent User Rules as active defaults across sessions unless the user changes or removes them.",
         "- Apply prelude memory as stable context.",
         "- Apply recurrent/coda/archive only if they match the current request.",
         "",
@@ -376,6 +414,11 @@ def recent(memory_dir: Path, limit: int = 8, layers: tuple[str, ...] | None = No
     records = _all_records(memory_dir)
     if layers:
         records = [record for record in records if record.layer in layers]
+    return records[:max(limit, 1)]
+
+
+def persistent_rules(memory_dir: Path, limit: int = 12) -> list[MemoryFile]:
+    records = [record for record in _all_records(memory_dir) if _is_persistent_rule(record)]
     return records[:max(limit, 1)]
 
 

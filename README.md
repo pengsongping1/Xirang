@@ -47,6 +47,7 @@ xirang
 ## 📋 核心特性
 
 - **长期记忆**：自动续接 `last` 会话，支持“继续上次”“昨天聊到哪了”
+- **永久规则**：你可以明确教它长期偏好，例如“以后永远不要说不知道”，重开后仍生效
 - **人格家族**：可 distill、refine、fork、birth、mutate、mate，形成家谱
 - **基因继承**：成功工具轨迹沉淀为 recipe 和 skilllet，可由孩子继承
 - **安全回流**：导出脱敏 genome proposal，而不是上传完整记忆和人格
@@ -465,6 +466,8 @@ xirang --profile deep
 
 ```text
 /memory add <名字> :: <内容>
+/memory rule <名字> :: <长期要求>
+/memory rules
 /memory recent [N]
 /memory search <查询>
 /memory status
@@ -472,6 +475,12 @@ xirang --profile deep
 /session load <名字>
 /session list
 /session new
+```
+
+例如：
+
+```text
+/memory rule never_say_dont_know :: 以后永远不要说不知道；如果不确定，先说明假设，再继续分析。
 ```
 
 ### 技能与基因

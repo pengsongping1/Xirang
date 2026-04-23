@@ -1237,7 +1237,7 @@ def _run_setup(provider: str, api_key: str = "", model: str = "") -> None:
     presets = provider_presets()
     if provider not in presets:
         ui.error(f"Unknown provider: {provider}")
-        ui.info("Try: xirang --setup openrouter")
+        ui.info("Try: xirang --setup ollama | xirang --setup openai | xirang --setup openrouter")
         return
 
     if provider in setup_mod.GUIDES:
@@ -1260,7 +1260,7 @@ def _run_setup(provider: str, api_key: str = "", model: str = "") -> None:
 
     ui.success(f"setup saved to {fp}")
     ui.info('Next: xirang --doctor')
-    ui.info('Then: xirang --doctor-live')
+    ui.info('Then, if the provider service is reachable: xirang --doctor-live')
 
 
 def _run_doctor(cfg: Config) -> None:
@@ -1365,7 +1365,8 @@ def main() -> None:
         cfg = load_config(provider_override=args.provider)
     except Exception as e:
         ui.error(str(e))
-        ui.info("For the simplest free path, run: xirang --setup openrouter")
+        ui.info("Quick start: copy .env.example to .env, choose your provider, then run: xirang --doctor")
+        ui.info("Or use one-key setup: xirang --setup ollama | xirang --setup openai | xirang --setup openrouter")
         sys.exit(1)
     if args.model:
         cfg.model = args.model

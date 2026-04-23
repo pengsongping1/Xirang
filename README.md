@@ -60,31 +60,127 @@ xirang
 
 ## 🚀 快速开始
 
+### 方法 1：标准安装
+
 ```bash
-cd xirang
-./one_minute_install.sh
+git clone https://github.com/pengsongping1/Xirang.git
+cd Xirang
+python3 -m venv .venv
 source .venv/bin/activate
-xirang --setup openrouter
-xirang --doctor
-xirang --doctor-live
-xirang --bench-dry-run
+python -m pip install --upgrade pip
+python -m pip install -e .
+cp .env.example .env
 ```
 
-如果你已经有 key，可以直接：
+然后按你的 provider 修改 `.env`，再运行：
 
 ```bash
+xirang --doctor
+xirang -p "你好，先介绍一下你自己"
+```
+
+### 方法 2：一键安装
+
+```bash
+cd Xirang
+./one_minute_install.sh
+source .venv/bin/activate
+xirang --doctor
+# provider 配好并通过 doctor 后再运行：
+xirang -p "你好"
+```
+
+如果你已经知道自己要用哪个 provider，也可以一步装好：
+
+```bash
+./one_minute_install.sh ollama
+./one_minute_install.sh openai YOUR_API_KEY
 ./one_minute_install.sh openrouter YOUR_API_KEY
 ```
 
-推荐从 `openrouter` 开始：配置简单，默认模型是 `qwen/qwen3-coder:free`。  
-如果你想本地跑，也可以用：
+如果你激活虚拟环境后仍然提示找不到 `xirang`，可以直接用：
+
+```bash
+python -m xirang --doctor
+python -m xirang -p "你好"
+```
+
+---
+
+## 🔑 Provider 配置
+
+### 方案 A：Ollama（本地模型）
+
+先安装并启动 Ollama，然后拉取模型：
+
+```bash
+ollama pull qwen2.5-coder:7b
+ollama serve
+```
+
+另开一个终端进入 Xirang：
 
 ```bash
 xirang --setup ollama
-xirang --provider ollama
+xirang --doctor
+xirang -p "你好"
 ```
 
-支持的 provider：
+如果你手动配 `.env`，最少需要：
+
+```env
+XIRANG_PROVIDER=ollama
+XIRANG_OLLAMA_BASE_URL=http://127.0.0.1:11434/v1
+XIRANG_OLLAMA_MODEL=qwen2.5-coder:7b
+```
+
+前提是你本机已经启动了 Ollama，并且模型已拉取。
+
+### 方案 B：OpenAI / OpenAI-Compatible
+
+如果你用的是 OpenAI 官方或兼容接口，推荐直接编辑 `.env`：
+
+```env
+XIRANG_PROVIDER=openai
+OPENAI_API_KEY=your_key_here
+```
+
+如果你用的是自建兼容服务：
+
+```env
+XIRANG_PROVIDER=openai_compat
+OPENAI_COMPAT_API_KEY=your_key_here
+XIRANG_OPENAI_COMPAT_BASE_URL=http://127.0.0.1:8000/v1
+XIRANG_OPENAI_COMPAT_MODEL=gpt-4o-mini
+```
+
+然后运行：
+
+```bash
+xirang --doctor
+xirang --doctor-live
+```
+
+### 方案 C：OpenRouter / Groq / Together / DeepSeek / Fireworks
+
+这些都已经内置支持，你可以选你自己实际在用的 provider，不需要只走 `openrouter`。
+
+例如：
+
+```bash
+xirang --setup groq
+xirang --setup together
+xirang --setup deepseek
+```
+
+或者直接改 `.env`：
+
+```env
+XIRANG_PROVIDER=deepseek
+DEEPSEEK_API_KEY=your_key_here
+```
+
+支持的 provider 包括：
 
 - `anthropic`
 - `openai`
@@ -97,7 +193,28 @@ xirang --provider ollama
 - `fireworks`
 - `openai_compat`
 
-常用启动方式：
+---
+
+## ✅ 第一次启动建议
+
+```bash
+xirang --doctor
+xirang --doctor-live         # 仅云端 provider 推荐执行
+xirang --bench-dry-run
+xirang
+```
+
+如果你只想快速验证：
+
+```bash
+xirang -p "你好，告诉我你现在能做什么"
+```
+
+---
+
+## 常用启动方式
+
+最常用的是这些：
 
 ```bash
 xirang                                  # 打开 REPL，默认续上 last
@@ -106,6 +223,16 @@ xirang --fresh                          # 不续上次，从零开始
 xirang --resume morning-notes           # 续指定会话
 xirang --profile deep                   # 更深的输出/工具迭代预算
 ```
+
+---
+
+## 新手最容易卡住的地方
+
+- **没配 provider**：先检查 `.env` 里的 `XIRANG_PROVIDER`
+- **没配 key**：云端 provider 需要对应的 `*_API_KEY`
+- **本地模型没启动**：`ollama` / `lmstudio` 必须先启动本地服务
+- **想验证是否真的通了**：先跑 `xirang --doctor`，再跑 `xirang --doctor-live`
+- **想知道自己该用哪个 provider**：先看 `/llm presets`
 
 ---
 

@@ -43,9 +43,20 @@ Xirang is installed.
 
 Quick start:
   source .venv/bin/activate
-  python -m xirang --setup openrouter
   python -m xirang --doctor
+  # after your provider is ready:
   python -m xirang -p "你好"
+
+Standard setup:
+  cp .env.example .env
+  # edit .env and choose the provider you actually use
+
+Common provider examples:
+  # Local model path: install Ollama first, then run:
+  python -m xirang --setup ollama
+  # Cloud providers will ask for a key:
+  python -m xirang --setup openai
+  python -m xirang --setup deepseek
 
 Useful commands:
   /llm presets
@@ -53,6 +64,8 @@ Useful commands:
   /catalog llm openrouter
   /catalog api weather
 
-One-line install with key:
+One-line install examples:
+  ./one_minute_install.sh ollama
+  ./one_minute_install.sh openai YOUR_API_KEY
   ./one_minute_install.sh openrouter YOUR_API_KEY
 EOF

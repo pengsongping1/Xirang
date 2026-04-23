@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xirang"
+version = "0.2.0a1"
+description = "Xirang / 息壤 — a lightweight, self-evolving agent with persona families and self-grown skills"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "pengsongping" }]
+keywords = ["agent", "ai", "cli", "memory", "automation", "desktop", "persona", "local-first"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+  "anthropic>=0.40.0",
+  "openai>=1.50.0",
+  "rich>=13.7.0",
+  "python-dotenv>=1.0.0",
+  "prompt_toolkit>=3.0.43",
+]
+
+[project.optional-dependencies]
+desktop = [
+  "pyautogui>=0.9.54",
+  "pillow>=10.0.0",
+]
+browser = [
+  "playwright>=1.40.0",
+]
+all = [
+  "pyautogui>=0.9.54",
+  "pillow>=10.0.0",
+  "playwright>=1.40.0",
+]
+
+[project.scripts]
+xirang = "xirang.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["xirang*"]

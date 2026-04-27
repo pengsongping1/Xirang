@@ -204,8 +204,8 @@ def _home_env(home: Path) -> dict[str, str]:
 
 def _merged_env(home: Path) -> dict[str, str]:
     env: dict[str, str] = {}
-    env.update(_cwd_env())
     env.update(_home_env(home))
+    env.update(_cwd_env())
     env.update(os.environ)
     return env
 

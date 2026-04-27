@@ -78,6 +78,35 @@ def recommended_model(provider: str) -> str:
     return str(provider_presets()[provider]["default_model"])
 
 
+def provider_env_values(
+    provider: str,
+    *,
+    api_key: str = "",
+    model: str = "",
+    profile: str = "balanced",
+) -> dict[str, str]:
+    provider = provider.lower()
+    presets = provider_presets()
+    if provider not in presets:
+        raise ValueError(f"Unknown provider: {provider}")
+
+    preset = presets[provider]
+    values = {
+        "XIRANG_PROVIDER": provider,
+        "XIRANG_PROFILE": profile,
+        str(preset["model_env"]): model or recommended_model(provider),
+    }
+    base_url = preset.get("default_base_url")
+    if base_url:
+        values[str(preset["base_url_env"])] = str(base_url)
+    if preset["requires_api_key"]:
+        key_env = primary_key_env(provider)
+        if not api_key:
+            raise ValueError(f"{provider} requires an API key for {key_env}")
+        values[key_env] = api_key.strip()
+    return values
+
+
 def update_env_file(path: Path, values: dict[str, str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     existing = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
@@ -104,6 +133,24 @@ def update_env_file(path: Path, values: dict[str, str]) -> None:
         pass
 
 
+def local_project_env_path(cwd: Path | None = None) -> Path | None:
+    root = (cwd or Path.cwd()).expanduser()
+    if not (root / ".env.example").exists():
+        return None
+    if not (root / "xirang").is_dir():
+        return None
+    pyproject = root / "pyproject.toml"
+    if not pyproject.exists():
+        return None
+    try:
+        text = pyproject.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    if 'name = "xirang"' not in text:
+        return None
+    return root / ".env"
+
+
 def configure_provider(
     home: Path,
     provider: str,
@@ -112,27 +159,34 @@ def configure_provider(
     model: str = "",
     profile: str = "balanced",
 ) -> Path:
-    provider = provider.lower()
-    presets = provider_presets()
-    if provider not in presets:
-        raise ValueError(f"Unknown provider: {provider}")
-
-    preset = presets[provider]
-    values = {
-        "XIRANG_PROVIDER": provider,
-        "XIRANG_PROFILE": profile,
-        str(preset["model_env"]): model or recommended_model(provider),
-    }
-    base_url = preset.get("default_base_url")
-    if base_url:
-        values[str(preset["base_url_env"])] = str(base_url)
-    if preset["requires_api_key"]:
-        key_env = primary_key_env(provider)
-        if not api_key:
-            raise ValueError(f"{provider} requires an API key for {key_env}")
-        values[key_env] = api_key.strip()
-
+    values = provider_env_values(
+        provider,
+        api_key=api_key,
+        model=model,
+        profile=profile,
+    )
     path = setup_path(home)
+    update_env_file(path, values)
+    return path
+
+
+def sync_local_project_env(
+    provider: str,
+    *,
+    api_key: str = "",
+    model: str = "",
+    profile: str = "balanced",
+    cwd: Path | None = None,
+) -> Path | None:
+    path = local_project_env_path(cwd)
+    if path is None:
+        return None
+    values = provider_env_values(
+        provider,
+        api_key=api_key,
+        model=model,
+        profile=profile,
+    )
     update_env_file(path, values)
     return path
 

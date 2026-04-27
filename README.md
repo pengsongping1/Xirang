@@ -72,6 +72,11 @@ python -m pip install -e .
 cp .env.example .env
 ```
 
+说明：
+
+- 当前目录的 `.env` 会优先于 `~/.xirang/.env`
+- 在仓库目录执行 `xirang --setup ...` 时，也会同步更新当前目录的 `.env`
+
 然后按你的 provider 修改 `.env`，再运行：
 
 ```bash

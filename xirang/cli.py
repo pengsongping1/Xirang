@@ -1254,11 +1254,19 @@ def _run_setup(provider: str, api_key: str = "", model: str = "") -> None:
             api_key=api_key,
             model=model,
         )
+        local_fp = setup_mod.sync_local_project_env(
+            provider,
+            api_key=api_key,
+            model=model,
+        )
     except Exception as e:
         ui.error(str(e))
         return
 
-    ui.success(f"setup saved to {fp}")
+    if local_fp:
+        ui.success(f"setup saved to {fp} and synced to {local_fp}")
+    else:
+        ui.success(f"setup saved to {fp}")
     ui.info('Next: xirang --doctor')
     ui.info('Then, if the provider service is reachable: xirang --doctor-live')
 

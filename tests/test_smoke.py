@@ -462,16 +462,20 @@ def test_legacy_home_migrates_into_xirang_home():
         root = Path(d)
         legacy = root / ".morrow"
         target = root / ".xirang"
+        work = root / "work"
         legacy.mkdir(parents=True, exist_ok=True)
+        work.mkdir()
         (legacy / "personas").mkdir()
         (legacy / ".env").write_text(
             "MORROW_PROVIDER=ollama\nMORROW_PROFILE=fast\nMORROW_OLLAMA_MODEL=qwen2.5-coder:7b\n",
             encoding="utf-8",
         )
+        old_cwd = Path.cwd()
         os.environ["HOME"] = str(root)
         os.environ.pop("XIRANG_HOME", None)
         os.environ.pop("MORROW_HOME", None)
         try:
+            os.chdir(work)
             cfg = config.load_config()
             assert cfg.home == target
             assert (target / ".env").exists()
@@ -480,6 +484,7 @@ def test_legacy_home_migrates_into_xirang_home():
             assert cfg.provider == "ollama"
             assert cfg.response_profile == "fast"
         finally:
+            os.chdir(old_cwd)
             os.environ.pop("HOME", None)
             os.environ.pop("XIRANG_PROVIDER", None)
             os.environ.pop("XIRANG_PROFILE", None)
@@ -529,10 +534,15 @@ def test_config_local_provider_without_key():
 def test_setup_writes_home_env_and_loads_it():
     from xirang import config, setup
     with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        work = root / "work"
+        work.mkdir()
+        old_cwd = Path.cwd()
         os.environ.pop("XIRANG_PROVIDER", None)
         os.environ.pop("OPENROUTER_API_KEY", None)
         os.environ["XIRANG_HOME"] = d
         try:
+            os.chdir(work)
             fp = setup.configure_provider(Path(d), "openrouter", api_key="sk-or-test")
             assert fp.exists()
             text = fp.read_text(encoding="utf-8")
@@ -546,7 +556,69 @@ def test_setup_writes_home_env_and_loads_it():
             assert cfg.model == "qwen/qwen3-coder:free"
             assert cfg.base_url == "https://openrouter.ai/api/v1"
         finally:
+            os.chdir(old_cwd)
             os.environ.pop("XIRANG_HOME", None)
+
+
+def test_config_cwd_env_overrides_home_env():
+    from xirang import config
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        home = root / "home"
+        cwd = root / "repo"
+        home.mkdir()
+        cwd.mkdir()
+        (home / ".env").write_text(
+            "XIRANG_PROVIDER=openrouter\n"
+            "OPENROUTER_API_KEY=sk-home\n"
+            "XIRANG_OPENROUTER_MODEL=home-model\n",
+            encoding="utf-8",
+        )
+        (cwd / ".env").write_text(
+            "XIRANG_PROVIDER=openai_compat\n"
+            "OPENAI_COMPAT_API_KEY=sk-cwd\n"
+            "XIRANG_OPENAI_COMPAT_BASE_URL=http://127.0.0.1:18080/v1\n"
+            "XIRANG_OPENAI_COMPAT_MODEL=cwd-model\n",
+            encoding="utf-8",
+        )
+        old_cwd = Path.cwd()
+        os.environ["XIRANG_HOME"] = str(home)
+        os.environ.pop("XIRANG_PROVIDER", None)
+        os.environ.pop("OPENROUTER_API_KEY", None)
+        os.environ.pop("OPENAI_COMPAT_API_KEY", None)
+        try:
+            os.chdir(cwd)
+            cfg = config.load_config()
+            assert cfg.provider == "openai_compat"
+            assert cfg.api_key == "sk-cwd"
+            assert cfg.model == "cwd-model"
+            assert cfg.base_url == "http://127.0.0.1:18080/v1"
+        finally:
+            os.chdir(old_cwd)
+            os.environ.pop("XIRANG_HOME", None)
+
+
+def test_setup_syncs_local_project_env():
+    from xirang import setup
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        (root / "xirang").mkdir()
+        (root / ".env.example").write_text("XIRANG_PROVIDER=ollama\n", encoding="utf-8")
+        (root / "pyproject.toml").write_text(
+            "[project]\nname = \"xirang\"\nversion = \"0.0.0\"\n",
+            encoding="utf-8",
+        )
+        fp = setup.sync_local_project_env(
+            "openrouter",
+            api_key="sk-or-test",
+            cwd=root,
+        )
+        assert fp == root / ".env"
+        assert fp.exists()
+        text = fp.read_text(encoding="utf-8")
+        assert "XIRANG_PROVIDER=openrouter" in text
+        assert "OPENROUTER_API_KEY=sk-or-test" in text
+        assert "XIRANG_OPENROUTER_MODEL=qwen/qwen3-coder:free" in text
 
 
 def test_doctor_rows_report_catalog_counts():
@@ -620,6 +692,61 @@ def test_catalog_search_and_import():
         _, llm_count = catalog.import_catalog(root, "llm", llm_readme)
         assert llm_count >= 2
         assert any("qwen" in entry.name.lower() for entry in catalog.search(root, "qwen coder", "llm"))
+
+
+def test_readme_local_commands_work_without_live_provider():
+    from xirang import automation, cli, config, session
+
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        work = root / "work"
+        work.mkdir()
+        old_cwd = Path.cwd()
+        os.environ["XIRANG_HOME"] = str(root / "home")
+        os.environ["XIRANG_PROVIDER"] = "ollama"
+        os.environ["OPENROUTER_API_KEY"] = "sk-or-test"
+        try:
+            os.chdir(work)
+            cfg = config.load_config()
+            agent = cli._build_agent(cfg)
+
+            for command in [
+                "/llm",
+                "/llm presets",
+                "/llm use openrouter",
+                "/llm provider ollama",
+                "/llm model qwen2.5-coder:7b",
+                "/brain deep",
+                "/catalog api weather",
+                "/catalog llm openrouter",
+                "/memory add project :: README audit",
+                "/memory rule keep_readme_working :: 文档里的命令必须可运行",
+                "/memory rules",
+                "/memory recent",
+                "/memory search README",
+                "/memory status",
+                "/session save demo",
+                "/session list",
+                "/cron add heartbeat :: @every 5m :: 输出一行当前状态",
+                "/cron list",
+                "/webhook add alerts :: 收到告警后总结事件并给出下一步",
+                "/webhook list",
+                "/bench dry-run",
+                "/genome status",
+                "/copilot status",
+            ]:
+                keep, agent = cli._handle_command(command, agent)
+                assert keep, command
+
+            assert any(row["name"] == "demo" for row in session.list_sessions(cfg.home))
+            assert any(job.name == "heartbeat" for job in automation.list_jobs(cfg.home))
+            assert any(route.name == "alerts" for route in automation.load_routes(cfg.home))
+            assert (cfg.home / "bench_results.json").exists()
+        finally:
+            os.chdir(old_cwd)
+            os.environ.pop("XIRANG_HOME", None)
+            os.environ.pop("XIRANG_PROVIDER", None)
+            os.environ.pop("OPENROUTER_API_KEY", None)
 
 
 def test_auto_memory_triggers():
@@ -1469,6 +1596,23 @@ def test_benchmark_dry_run():
         finally:
             os.environ.pop("XIRANG_HOME", None)
             os.environ.pop("XIRANG_PROVIDER", None)
+
+
+def test_benchmark_script_dry_run_from_repo_root():
+    with tempfile.TemporaryDirectory() as d:
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(ROOT)
+        env["XIRANG_HOME"] = d
+        env["XIRANG_PROVIDER"] = "ollama"
+        proc = subprocess.run(
+            [sys.executable, "benchmarks/run_bench.py", "--dry-run"],
+            cwd=str(ROOT),
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        assert proc.returncode == 0
+        assert '"dry_run": true' in proc.stdout.lower()
 
 
 def test_cli_prompt_failure_exits_nonzero():
